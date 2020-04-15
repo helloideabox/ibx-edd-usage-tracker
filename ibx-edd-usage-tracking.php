@@ -305,6 +305,10 @@ class IBX_EDD_Usage_Tracking {
 	}
 
 	private function send_discount( $email, $userdata, $url, $site_id ) {
+		// Force use user email instead of site email.
+		if ( is_email( $userdata['email'] ) ) {
+			$email = $userdata['email'];
+		}
 
 		// Generate a 15 character code
 		$code    = substr( md5( $email . $url ), 0, 15 );
