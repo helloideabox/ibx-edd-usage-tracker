@@ -26,6 +26,10 @@ class IBX_EDD_Usage_Tracking {
 	private static $instance;
 
 	private function __construct() {
+		if ( ! class_exists( 'Easy_Digital_Downloads' ) ) {
+			return;
+		}
+
 		$this->includes();
 
 		if ( IBX_EDD_UT_VERSION != get_option( 'edd_usage_tracking_version' ) ) {
