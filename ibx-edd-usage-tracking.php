@@ -208,12 +208,25 @@ class IBX_EDD_Usage_Tracking {
 	}
 
 	private function subscribe_email( $email, $userdata ) {
-		if ( function_exists( 'flowdee_ml_add_subscriber' ) ) {
-			$group = edd_get_option( 'edd_ml_group' );
+		$service = edd_get_option( 'edd_ut_subscribe_service' );
 
-			if ( empty( $group ) ) {
-				return;
-			}
+		$group = edd_get_option( 'edd_ut_subscribe_service_group' );
+
+		if ( empty( $group ) ) {
+			return;
+		}
+	
+		if ( 'mailerlite' === $service ) {
+			$this->subscribe_mailerlite( $email, $userdata, $group );
+		}
+		if ( 'mailchimp' === $service ) {
+			$this-subscribe_mailchimp( $email, $userdata, $group );
+		}
+	}
+
+	private function subscribe_mailerlite( $email, $userdata, $group ) {
+		if ( function_exists( 'flowdee_ml_add_subscriber' ) ) {
+			//$group = edd_get_option( 'edd_ml_group' );
 
 			$double_option = edd_get_option( 'edd_ml_double_optin', false );
 
@@ -241,6 +254,23 @@ class IBX_EDD_Usage_Tracking {
 
 			// edd_ml_debug_log( $subscriber );
 			$added = flowdee_ml_add_subscriber( $group, $subscriber );
+		}
+	}
+
+	private function subscribe_mailchimp( $email, $userdata, $list_id ) {
+		if ( ! class_exists( 'EDD_MailChimp_List' ) ) {
+			return;
+		}
+
+		try {
+			$list = new EDD_MailChimp_List( $list_id );
+			$list->subscribe( $userdata );
+		} catch ( Exception $e ) {
+			if ( function_exists( 'edd_debug_log' ) ) {
+				edd_debug_log( 'subscribe_mailchimp(): ' . $e->get_message() );
+			} else {
+				@error_log( 'subscribe_mailchimp(): ' . $e->get_message() );
+			}
 		}
 	}
 

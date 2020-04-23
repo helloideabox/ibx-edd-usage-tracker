@@ -26,6 +26,7 @@ class IBX_EDD_Usage_Tracking_Admin {
 		add_action( 'edd_usage_tracking_tab_general', array( $this, 'general_tab' ) );
 		add_action( 'edd_usage_tracking_tab_checkin_graph', array( $this, 'checkin_graph' ) );
 		add_action( 'edd_usage_tracking_tab_email_template', array( $this, 'email_template_tab' ) );
+		add_action( 'edd_usage_tracking_tab_subscribe', array( $this, 'subscribe_tab' ) );
 
 		$this->save_settings_fields();
 	}
@@ -57,14 +58,15 @@ class IBX_EDD_Usage_Tracking_Admin {
 			'logs'          => __( 'Logs', 'edd-usage-tracking' ),
 			'checkin_graph' => __( 'Check-In Graph', 'edd-usage-tracking' ),
 			'email_template' => __( 'Email', 'edd-usage-tracking' ),
+			'subscribe' => __( 'Subscribe', 'edd-usage-tracking' ),
 		);
 
 		return $tabs;
 	}
 
 	public function usage_tracking_page() {
-	$active_tab = isset( $_GET['tab'] ) ? $_GET['tab'] : 'general';
-?>
+		$active_tab = isset( $_GET['tab'] ) ? $_GET['tab'] : 'general';
+	?>
 		<div class="wrap">
 			<h1 class="nav-tab-wrapper">
 				<?php
@@ -84,6 +86,8 @@ class IBX_EDD_Usage_Tracking_Admin {
 						'_wpnonce',
 						'_wp_http_referer',
 						'view',
+						'section',
+						'service'
 					), $tab_url );
 
 					$active = $active_tab == $tab_id ? ' nav-tab-active' : '';
@@ -362,6 +366,7 @@ class IBX_EDD_Usage_Tracking_Admin {
 				</li>
 			</ul>
 		</div>
+		<form method="post">
 		<table class="form-table">
 			<tr valign="top">
 				<th><label for="edd_ut_email_from_name"><?php _e( 'From Name', 'edd-usage-tracker' ); ?></label></th>
@@ -439,13 +444,107 @@ class IBX_EDD_Usage_Tracking_Admin {
 			</tr>
 			<?php } ?>
 		</table>
-		<?php wp_nonce_field( 'edd_ut_email', 'edd_ut_email' ); ?>
-		<?php submit_button(); ?>
+		<?php
+		wp_nonce_field( 'edd_ut_admin_settings', 'edd_ut_admin_settings' );
+		submit_button();
+		?>
+		</form>
+		<?php
+	}
+
+	public function subscribe_tab() {
+		if ( isset( $_GET['service'] ) ) {
+			$service = $_GET['service'];
+		} else {
+			$service = edd_get_option( 'edd_ut_subscribe_service' );
+		}
+		$services = (array) apply_filters( 'ibx_edd_ut_subscribe_services', array() );
+		if ( class_exists( 'EDD_Mailerlite' ) ) {
+			$services['mailerlite'] = 'EDD Mailerlite';
+		}
+		if ( class_exists( 'EDD_MailChimp_List' ) ) {
+			$services['mailchimp'] = 'EDD MailChimp';
+		}
+
+		$group = edd_get_option( 'edd_ut_subscribe_service_group' );
+		?>
+		<form method="post">
+		<table class="form-table">
+			<tr valign="top">
+				<th><label for="edd_ut_subscribe_service"><?php _e( 'Service', 'edd-usage-tracker' ); ?></label></th>
+				<td>
+					<select name="edd_ut_subscribe_service" id="edd_ut_subscribe_service">
+						<option value=""><?php esc_html_e( 'None', 'edd-usage-tracker' ); ?></option>
+						<?php
+						if ( ! empty( $services ) ) {
+							foreach ( $services as $key => $label ) {
+						?>
+						<option value="<?php echo $key; ?>" <?php selected( $service, $key, true ); ?>><?php echo $label; ?></option>
+						<?php
+							}
+						}
+						?>
+					</select>
+				</td>
+			</tr>
+			<?php if ( $service && isset( $services[ $service ] ) ) { ?>
+			<tr valign="top">
+				<th><label for="edd_ut_subscribe_service_group"><?php _e( 'Group', 'edd-usage-tracker' ); ?></label></th>
+				<td>
+					<select id="edd_ut_subscribe_service_group" name="edd_ut_subscribe_service_group">
+						<?php if ( 'mailerlite' === $service && function_exists( 'edd_ml_settings_get_group_options' ) ) { ?>
+							<?php
+								$groups = edd_ml_settings_get_group_options();
+								foreach ( $groups as $id => $name ) {
+									?>
+									<option value="<?php echo $id; ?>" <?php selected( $group, $id, true ); ?>><?php echo $name; ?></option>
+									<?php
+								}
+							?>
+						<?php } ?>
+						<?php if ( 'mailchimp' === $service && class_exists( 'EDD_MailChimp_List' ) ) { ?>
+							<?php
+							try {
+								$result = EDD_MailChimp_List::all();
+							} catch (Exception $e) {
+								?>
+								<option value=""><?php _e('Please supply a valid MailChimp API key.', 'edd-usage-tracker'); ?></option>
+								<?php
+							}
+							if ( isset( $result ) && isset( $result['lists'] ) && ! empty( $result['lists'] ) ) {
+								foreach ( $result['lists'] as $list ) {
+									?>
+									<option value="<?php echo $list['id']; ?>" <?php selected( $group, $list['id'], true ); ?>><?php echo $list['name']; ?></option>
+									<?php
+								}
+							}
+							?>
+						<?php } ?>
+					</select>
+				</td>
+			</tr>
+			<?php } ?>
+		</table>
+		<?php
+		wp_nonce_field( 'edd_ut_admin_settings', 'edd_ut_admin_settings' );
+		submit_button();
+		?>
+		</form>
+		<script>
+			(function($) {
+				$('#edd_ut_subscribe_service').on('change', function() {
+					<?php $url = add_query_arg( 'service', $service ); ?>
+					var url = '<?php echo $url; ?>'.split('&service')[0];
+					url += '&service=' + $(this).val();
+					window.location.href = url;
+				});
+			})(jQuery);
+		</script>
 		<?php
 	}
 
 	private function save_settings_fields() {
-		if ( ! isset( $_POST['edd_ut_email'] ) || ! wp_verify_nonce( $_POST['edd_ut_email'], 'edd_ut_email' ) ) {
+		if ( ! isset( $_POST['edd_ut_admin_settings'] ) || ! wp_verify_nonce( $_POST['edd_ut_admin_settings'], 'edd_ut_admin_settings' ) ) {
 			return;
 		}
 
@@ -468,13 +567,27 @@ class IBX_EDD_Usage_Tracking_Admin {
 			edd_update_option( 'edd_ut_email_heading_disc_exp', sanitize_text_field( $_POST['edd_ut_email_heading_disc_exp'] ) );
 		}
 		if ( isset( $_POST['edd_ut_email_template'] ) ) {
-			$template = sanitize_textarea_field( $_POST['edd_ut_email_template'] );
+			add_filter( 'safe_style_css', array( $this, 'safe_style_css' ) );
+			$template = wp_kses_post( $_POST['edd_ut_email_template'] );
+			remove_filter( 'safe_style_css', array( $this, 'safe_style_css' ) );
 			edd_update_option( 'edd_ut_email_template', $template );
 		}
 		if ( isset( $_POST['edd_ut_email_template_disc_exp'] ) ) {
-			$template = sanitize_textarea_field( $_POST['edd_ut_email_template_disc_exp'] );
+			add_filter( 'safe_style_css', array( $this, 'safe_style_css' ) );
+			$template = wp_kses_post( $_POST['edd_ut_email_template_disc_exp'] );
+			remove_filter( 'safe_style_css', array( $this, 'safe_style_css' ) );
 			edd_update_option( 'edd_ut_email_template_disc_exp', $template );
 		}
+
+		// Subscribe settings.
+		if ( isset( $_POST['edd_ut_subscribe_service'] ) ) {
+			edd_update_option( 'edd_ut_subscribe_service', sanitize_text_field( $_POST['edd_ut_subscribe_service'] ) );
+		}
+	}
+
+	public function safe_style_css( $styles ) {
+		$styles[] = 'display';
+    	return $styles;
 	}
 }
 
